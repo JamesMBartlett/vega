@@ -43,6 +43,7 @@ export default function(spec, scope) {
   op = scope.add(Mark({
     markdef:     definition(spec),
     interactive: interactive(spec.interactive, scope),
+    propEventsToOverlapped: spec.propEventsToOverlapped,
     clip:        clip(spec.clip, scope),
     context:     {$context: true},
     groups:      scope.lookup(),

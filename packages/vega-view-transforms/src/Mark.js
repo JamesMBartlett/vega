@@ -28,6 +28,7 @@ prototype.transform = function(_, pulse) {
     mark.source = this.source; // point to upstream collector
     mark.clip = _.clip;
     mark.interactive = _.interactive;
+    mark.propEventsToOverlapped = _.propEventsToOverlapped;
     this.value = mark;
   }
 

@@ -167,7 +167,8 @@ function pick(context, scene, x, y, gx, gy) {
     // hit test against contained marks
     hit = pickVisit(group, mark => pickMark(mark, dx, dy)
       ? this.pick(mark, x, y, dx, dy)
-      : null
+      : null,
+      mark => mark.propEventsToOverlapped
     );
 
     // hit test against group background

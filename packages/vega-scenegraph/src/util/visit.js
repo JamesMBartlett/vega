@@ -36,23 +36,37 @@ export function visit(scene, visitor) {
   }
 }
 
-export function pickVisit(scene, visitor) {
-  var items = scene.items, hit, i;
+export function pickVisit(scene, visitor, tee) {
+  var items = scene.items, hit, i, allhits = [];
   if (!items || !items.length) return null;
 
   var zitems = zorder(scene);
   if (zitems && zitems.length) items = zitems;
 
   for (i=items.length; --i >= 0;) {
-    if (hit = visitor(items[i])) return hit;
+    if (hit = visitor(items[i])) {
+      if (!tee || !tee(items[i])) {
+        return (allhits.length) ? [...allhits, ...((hit.length) ? hit : [hit])] : hit;
+      }
+      allhits.push(...((hit.length) ? hit : [hit]));
+    }
   }
 
   if (items === zitems) {
     for (items=scene.items, i=items.length; --i >= 0;) {
       if (!items[i].zindex) {
-        if (hit = visitor(items[i])) return hit;
+        if (hit = visitor(items[i])) {
+          if (!tee || !tee(items[i])) {
+            return (allhits.length) ? [...allhits, ...((hit.length) ? hit : [hit])] : hit;
+          }
+          allhits.push(...((hit.length) ? hit : [hit]));
+        }
       }
     }
+  }
+
+  if (allhits.length) {
+    return allhits;
   }
 
   return null;

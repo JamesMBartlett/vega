@@ -71,6 +71,7 @@ const mark = object({
   clip: markclipRef,
   sort: compareRef,
   interactive: booleanOrSignal,
+  propEventsToOverlapped: booleanType,
   encode: def('encode'),
   transform: array(def('transformMark')),
   on: def('onMarkTrigger')

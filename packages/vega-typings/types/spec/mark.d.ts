@@ -58,6 +58,7 @@ export interface BaseMark {
   zindex?: number;
   on?: OnMarkTrigger[];
   style?: string | string[];
+  propEventsToOverlapped?: boolean;
 }
 export interface ArcMark extends BaseMark, Encode.Encodable<Encode.ArcEncodeEntry> {
   type: 'arc';
