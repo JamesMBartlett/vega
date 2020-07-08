@@ -28,6 +28,8 @@ const rootEncode = spec => extendEncode(
 export default function parseView(spec, scope) {
   const config = scope.config;
 
+  console.log(JSON.stringify(config));
+
   // add scenegraph root
   const root = ref(scope.root = scope.add(operator()));
 

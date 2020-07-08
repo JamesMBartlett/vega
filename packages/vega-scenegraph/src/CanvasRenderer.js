@@ -106,7 +106,6 @@ prototype._render = function(scene) {
         h = this._height,
         db = this._dirty,
         vb = viewBounds(o, w, h);
-
   // setup
   g.save();
   const b = this._redraw || db.empty()

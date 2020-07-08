@@ -71,6 +71,7 @@ export class View {
       locale?: LocaleFormatters;
       expr?: any;
     },
+    sharedctx?: any,
   );
 
   initialize(container?: Element | string, bindContainer?: Element | string): this;

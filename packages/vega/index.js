@@ -62,7 +62,8 @@ export {
 } from 'vega-projection';
 
 export {
-  View
+  View,
+  MultiView
 } from 'vega-view';
 
 export {
@@ -74,7 +75,8 @@ export {
 } from 'vega-format';
 
 export {
-  expressionFunction
+  expressionFunction,
+  functionContext
 } from 'vega-functions';
 
 export {

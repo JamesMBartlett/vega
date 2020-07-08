@@ -13,8 +13,7 @@ var prototype = inherits(Render, Transform);
 
 prototype.transform = function(_, pulse) {
   var view = pulse.dataflow;
-
-  pulse.visit(pulse.ALL, item => view.dirty(item));
+  pulse.visit(pulse.ALL, item => view.dirty(item, this.id));
 
   // set z-index dirty flag as needed
   if (pulse.fields && pulse.fields['zindex']) {

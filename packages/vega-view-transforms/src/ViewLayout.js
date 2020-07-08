@@ -13,6 +13,7 @@ import {titleLayout} from './layout/title';
 import {Transform} from 'vega-dataflow';
 import {Bounds} from 'vega-scenegraph';
 import {inherits} from 'vega-util';
+import { tupleid } from 'vega-dataflow/src/Tuple';
 
 /**
  * Layout view elements such as axes and legends.
@@ -28,7 +29,7 @@ export default function ViewLayout(params) {
 var prototype = inherits(ViewLayout, Transform);
 
 prototype.transform = function(_, pulse) {
-  var view = pulse.dataflow;
+  var view = pulse.dataflow.getViewForOp(this);
   _.mark.items.forEach(group => {
     if (_.layout) trellisLayout(view, group, _.layout);
     layoutGroup(view, group, _);

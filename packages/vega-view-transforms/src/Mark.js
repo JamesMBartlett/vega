@@ -22,7 +22,8 @@ prototype.transform = function(_, pulse) {
 
   // acquire mark on first invocation, bind context and group
   if (!mark) {
-    mark = pulse.dataflow.scenegraph().mark(_.markdef, lookup(_), _.index);
+    mark = _.context.dataflow.scenegraph().mark(_.markdef, lookup(_), _.index);
+    mark.context = _.context;
     mark.group.context = _.context;
     if (!_.context.group) _.context.group = mark.group;
     mark.source = this.source; // point to upstream collector

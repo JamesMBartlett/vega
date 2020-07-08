@@ -2,7 +2,7 @@ import parseUpdate from './update';
 import {parseExpression} from 'vega-functions';
 import {error} from 'vega-util';
 
-export default function(signal, scope) {
+export default function(signal, scope, blockHandlers) {
   var op = scope.getSignal(signal.name),
       expr = signal.update;
 
@@ -22,6 +22,9 @@ export default function(signal, scope) {
   }
 
   if (signal.on) {
+    if (blockHandlers) {
+      error('Global signals can not include event stream handlers.');
+    }
     signal.on.forEach(function(_) {
       parseUpdate(_, scope, op.id);
     });

@@ -2993,6 +2993,9 @@
         "interactive": {
           "$ref": "#/refs/booleanOrSignal"
         },
+        "teeEvents": {
+          "type": "boolean"
+        },
         "encode": {
           "$ref": "#/defs/encode"
         },

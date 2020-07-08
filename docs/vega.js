@@ -14202,23 +14202,37 @@
     }
   }
 
-  function pickVisit(scene, visitor) {
-    var items = scene.items, hit, i;
+  function pickVisit(scene, visitor, tee) {
+    var items = scene.items, hit, i, allhits = [];
     if (!items || !items.length) return null;
 
     var zitems = zorder(scene);
     if (zitems && zitems.length) items = zitems;
 
     for (i=items.length; --i >= 0;) {
-      if (hit = visitor(items[i])) return hit;
+      if (hit = visitor(items[i])) {
+        if (!tee || !tee(items[i])) {
+          return (allhits.length) ? [...allhits, ...((hit.length) ? hit : [hit])] : hit;
+        }
+        allhits.push(...((hit.length) ? hit : [hit]));
+      }
     }
 
     if (items === zitems) {
       for (items=scene.items, i=items.length; --i >= 0;) {
         if (!items[i].zindex) {
-          if (hit = visitor(items[i])) return hit;
+          if (hit = visitor(items[i])) {
+            if (!tee || !tee(items[i])) {
+              return (allhits.length) ? [...allhits, ...((hit.length) ? hit : [hit])] : hit;
+            }
+            allhits.push(...((hit.length) ? hit : [hit]));
+          }
         }
       }
+    }
+
+    if (allhits.length) {
+      return allhits;
     }
 
     return null;
@@ -14648,7 +14662,8 @@
       // hit test against contained marks
       hit = pickVisit(group, mark => pickMark(mark, dx, dy)
         ? this.pick(mark, x, y, dx, dy)
-        : null
+        : null,
+        mark => mark.teeEvents
       );
 
       // hit test against group background
@@ -15930,10 +15945,11 @@
 
   function CanvasHandler(loader, tooltip) {
     Handler.call(this, loader, tooltip);
-    this._down = null;
-    this._touch = null;
+    this._down = [];
+    this._touch = [];
     this._first = true;
     this._events = {};
+    this._actives = [];
   }
 
   const prototype$L = inherits(CanvasHandler, Handler);
@@ -15987,36 +16003,45 @@
 
   function move(moveEvent, overEvent, outEvent) {
     return function(evt) {
-      const a = this._active,
-            p = this.pickEvent(evt);
+      const a = this._actives;
+      const p = this.pickEvent(evt);
+      const intersect = a.filter(item => p.some(i => i === item));
+      const noLongerActive = a.filter(item => !p.some(i => i === item));
+      const newItems = p.filter(item => !a.some(i => i === item));
 
-      if (p === a) {
-        // active item and picked item are the same
-        this.fire(moveEvent, evt); // fire move
-      } else {
-        // active item and picked item are different
-        if (!a || !a.exit) {
-          // fire out for prior active item
-          // suppress if active item was removed from scene
-          this.fire(outEvent, evt);
+      intersect.forEach((item) => {
+        // these items were picked and active.
+        this.fire(moveEvent, evt, item); // fire move.
+      });
+
+      noLongerActive.forEach((item) => {
+        // these items were active but not in picked.
+        if (!item || !item.exit) {
+          // fire out for item
+          // suppress if item was removed from scene
+          this.fire(outEvent, evt, item);
         }
-        this._active = p;          // set new active item
-        this.fire(overEvent, evt); // fire over for new active item
-        this.fire(moveEvent, evt); // fire move for new active item
-      }
+      });
+
+      newItems.forEach((item) => {
+        this.fire(overEvent, evt, item); // fire over for new item
+        this.fire(moveEvent, evt, item); // fire move for new item
+      });
+
+      this._actives = [...intersect, ...newItems];
     };
   }
 
   function inactive(type) {
     return function(evt) {
-      this.fire(type, evt);
-      this._active = null;
+      this._actives.forEach((item) => this.fire(type, evt, item));
+      this._actives = [];
     };
   }
 
   // to keep old versions of firefox happy
   prototype$L.DOMMouseScroll = function(evt) {
-    this.fire(MouseWheelEvent, evt);
+    this._actives.forEach((item) => this.fire(MouseWheelEvent, evt, item));
   };
 
   prototype$L.mousemove = move(MouseMoveEvent, MouseOverEvent, MouseOutEvent);
@@ -16026,56 +16051,57 @@
   prototype$L.dragleave = inactive(DragLeaveEvent);
 
   prototype$L.mousedown = function(evt) {
-    this._down = this._active;
-    this.fire(MouseDownEvent, evt);
+    this._down = this._actives;
+    this._actives.forEach((item) => this.fire(MouseDownEvent, evt, item));
   };
 
   prototype$L.click = function(evt) {
-    if (this._down === this._active) {
-      this.fire(ClickEvent, evt);
-      this._down = null;
-    }
+    this._actives.forEach((item) => {
+      if (this._down.some(i => i === item)) {
+        this.fire(ClickEvent, evt, item);
+      }
+    });
+    this._down = [];
   };
 
   prototype$L.touchstart = function(evt) {
     this._touch = this.pickEvent(evt.changedTouches[0]);
 
     if (this._first) {
-      this._active = this._touch;
+      this._actives = this._touch;
       this._first = false;
     }
 
-    this.fire(TouchStartEvent, evt, true);
+    this._touch.forEach(item => this.fire(TouchStartEvent, evt, item));
   };
 
   prototype$L.touchmove = function(evt) {
-    this.fire(TouchMoveEvent, evt, true);
+    this._touch.forEach(item => this.fire(TouchMoveEvent, evt, item));
   };
 
   prototype$L.touchend = function(evt) {
-    this.fire(TouchEndEvent, evt, true);
-    this._touch = null;
+    this._touch.forEach(item => this.fire(TouchEndEvent, evt, item));
+    this._touch = [];
   };
 
   // fire an event
-  prototype$L.fire = function(type, evt, touch) {
-    const a = touch ? this._touch : this._active,
-          h = this._handlers[type];
+  prototype$L.fire = function(type, evt, item) {
+    const h = this._handlers[type];
 
     // set event type relative to scenegraph items
     evt.vegaType = type;
 
     // handle hyperlinks and tooltips first
-    if (type === HrefEvent && a && a.href) {
-      this.handleHref(evt, a, a.href);
+    if (type === HrefEvent && item && item.href) {
+      this.handleHref(evt, item, item.href);
     } else if (type === TooltipShowEvent || type === TooltipHideEvent) {
-      this.handleTooltip(evt, a, type !== TooltipHideEvent);
+      this.handleTooltip(evt, item, type !== TooltipHideEvent);
     }
 
     // invoke all registered handlers
     if (h) {
       for (let i=0, len=h.length; i<len; ++i) {
-        h[i].handler.call(this._obj, evt, a);
+        h[i].handler.call(this._obj, evt, item);
       }
     }
   };
@@ -16113,7 +16139,8 @@
   prototype$L.pickEvent = function(evt) {
     const p = point$4(evt, this._canvas),
           o = this._origin;
-    return this.pick(this._scene, p[0], p[1], p[0] - o[0], p[1] - o[1]);
+    const picked = this.pick(this._scene, p[0], p[1], p[0] - o[0], p[1] - o[1]);
+    return (picked && typeof picked.length !== 'undefined') ? picked : [picked];
   };
 
   // find the scenegraph item at the current mouse position
@@ -20931,6 +20958,7 @@
       mark.source = this.source; // point to upstream collector
       mark.clip = _.clip;
       mark.interactive = _.interactive;
+      mark.teeEvents = _.teeEvents;
       this.value = mark;
     }
 
@@ -37691,11 +37719,15 @@
    * @constructor
    * @param {object} spec - The Vega dataflow runtime specification.
    */
-  function View(spec, options) {
+  function View(spec, options, sharedctx) {
     const view = this;
     options = options || {};
 
-    Dataflow.call(view);
+    if (sharedctx) {
+      Object.assign(view, sharedctx.dataflow);
+    } else {
+      Dataflow.call(view);
+    }
     if (options.loader) view.loader(options.loader);
     if (options.logger) view.logger(options.logger);
     if (options.logLevel != null) view.logLevel(options.logLevel);
@@ -37726,7 +37758,13 @@
     view.globalCursor(view._eventConfig.globalCursor);
 
     // initialize dataflow graph
-    const ctx = runtime(view, spec, options.expr);
+    var ctx;
+    if (sharedctx) {
+      ctx = sharedctx.fork().parse(spec);
+      ctx.dataflow = this;
+    } else {
+      ctx = runtime(view, spec, options.expr);
+    }
     view._runtime = ctx;
     view._signals = ctx.signals;
     view._bind = (spec.bindings || []).map(_ => ({
@@ -37734,6 +37772,9 @@
       param: extend({}, _)
     }));
 
+    console.log('ctx.root', ctx.root);
+    console.log('root', root);
+    console.log('ctx.data', ctx.data);
     // initialize scenegraph
     if (ctx.root) ctx.root.set(root);
     root.source = ctx.data.root.input;
@@ -40262,6 +40303,7 @@
     op = scope.add(Mark$1({
       markdef:     definition$1(spec),
       interactive: interactive(spec.interactive, scope),
+      teeEvents: spec.teeEvents,
       clip:        clip$3(spec.clip, scope),
       context:     {$context: true},
       groups:      scope.lookup(),
@@ -42418,6 +42460,7 @@
   exports.format = format;
   exports.formatLocale = numberFormatDefaultLocale;
   exports.formats = formats;
+  exports.functionContext = functionContext;
   exports.hasOwnProperty = hasOwnProperty;
   exports.id = id;
   exports.identity = identity;

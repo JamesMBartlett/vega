@@ -28,6 +28,21 @@ import {
   error, extend, hasOwnProperty, inherits, stringValue
 } from 'vega-util';
 
+
+export function MultiView(multiSpec, options) {
+  if (!multiSpec.multi) {
+    throw `Trying to construct a Multi View from a single view spec`;
+  }
+  const shareddf = new Dataflow();
+  const sharedctx = runtime(shareddf, multiSpec.global, options.expr);
+  const views = {}
+  Object.getOwnPropertyNames(multiSpec.children || {}).forEach((viewName) => {
+    const spec = multiSpec.children[viewName];
+    views[viewName] = new View(spec, options, sharedctx);
+  });
+  return views;
+}
+
 /**
  * Create a new View instance from a Vega dataflow runtime specification.
  * The generated View will not immediately be ready for display. Callers
@@ -38,11 +53,16 @@ import {
  * @constructor
  * @param {object} spec - The Vega dataflow runtime specification.
  */
-export default function View(spec, options) {
+export default function View(spec, options, sharedctx) {
+  if (spec.multi) {
+    throw `Trying to initialize a single View with a Multi View Spec`;
+  }
   const view = this;
   options = options || {};
 
-  Dataflow.call(view);
+  view.df = (sharedctx) ? sharedctx.dataflow : new Dataflow();
+  view.df.registerView(view);
+
   if (options.loader) view.loader(options.loader);
   if (options.logger) view.logger(options.logger);
   if (options.logLevel != null) view.logLevel(options.logLevel);
@@ -67,13 +87,16 @@ export default function View(spec, options) {
   view._timers = [];
   view._eventListeners = [];
   view._resizeListeners = [];
+  view._operators = {};
 
   // initialize event configuration
   view._eventConfig = initializeEventConfig(spec.eventConfig);
   view.globalCursor(view._eventConfig.globalCursor);
 
   // initialize dataflow graph
-  const ctx = runtime(view, spec, options.expr);
+  const registerOpsCb = (op) => view._operators[op.id] = op;
+  const ctx = runtime(view, spec, options.expr, registerOpsCb, sharedctx); 
+  window['ctx'] = ctx;
   view._runtime = ctx;
   view._signals = ctx.signals;
   view._bind = (spec.bindings || []).map(_ => ({
@@ -115,14 +138,36 @@ export default function View(spec, options) {
   if (options.container) view.initialize(options.container, options.bind);
 }
 
-var prototype = inherits(View, Dataflow);
+var prototype = View.prototype;
+
+Object.getOwnPropertyNames(Dataflow.prototype).forEach((name) => {
+  const f = Dataflow.prototype[name];
+  if (f && typeof f === 'function') {
+    prototype[name] = function (..._) {
+      return f.call(this.df, ..._);
+    };
+  }
+});
 
 // -- DATAFLOW / RENDERING ----
+function wrapCallback(view, cb) {
+  return cb && ((_) => cb(view));
+}
 
-prototype.evaluate = async function(encode, prerun, postrun) {
-  // evaluate dataflow and prerun
-  await Dataflow.prototype.evaluate.call(this, encode, prerun);
+prototype.run = function(encode, prerun, postrun) {
+  this.df.run(encode, wrapCallback(this, prerun), wrapCallback(this, postrun));
+  return this;
+}
 
+prototype.runAfter = function(callback, enqueue, priority) {
+  this.df.runAfter(wrapCallback(this, callback), enqueue, priority);
+}
+
+prototype.runAsync = async function(encode, prerun, postrun) {
+  return this.df.runAsync(encode, wrapCallback(this, prerun), wrapCallback(this, postrun)).then(this);
+}
+
+prototype.renderIfNeeded = async function () {
   // render as needed
   if (this._redraw || this._resize) {
     try {
@@ -138,11 +183,6 @@ prototype.evaluate = async function(encode, prerun, postrun) {
       this.error(e);
     }
   }
-
-  // evaluate postrun
-  if (postrun) asyncCallback(this, postrun);
-
-  return this;
 };
 
 prototype.dirty = function(item) {
@@ -183,7 +223,7 @@ prototype.signal = function(name, value, options) {
   var op = lookupSignal(this, name);
   return arguments.length === 1
     ? op.value
-    : this.update(op, value, options);
+    : this.df.update(op, value, options);
 };
 
 prototype.width = function(_) {
@@ -240,7 +280,7 @@ prototype.resize = function() {
   // set flag to perform autosize
   this._autosize = 1;
   // touch autosize signal to ensure top-level ViewLayout runs
-  return this.touch(lookupSignal(this, 'autosize'));
+  return this.df.touch(lookupSignal(this, 'autosize'));
 };
 
 prototype._resetRenderer = function() {
@@ -361,6 +401,10 @@ prototype.preventDefault = function(_) {
     return this._preventDefault;
   }
 };
+
+prototype.hasOp = function(id) {
+  return !!this._operators[id];
+}
 
 prototype.timer = timer;
 prototype.events = events;

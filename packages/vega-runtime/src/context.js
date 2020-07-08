@@ -16,11 +16,11 @@ import {canonicalType, isCollect} from './util';
  * Enables lookup of parsed operators, event streams, accessors, etc.
  * Provides a 'fork' method for creating child contexts for subflows.
  */
-export default function(df, transforms, functions, expr) {
-  return new Context(df, transforms, functions, expr);
+export default function(df, transforms, functions, expr, registerOpsCb) {
+  return new Context(df, transforms, functions, expr, registerOpsCb);
 }
 
-function Context(df, transforms, functions, expr) {
+function Context(df, transforms, functions, expr, registerOpsCb) {
   this.dataflow = df;
   this.transforms = transforms;
   this.events = df.events.bind(df);
@@ -30,6 +30,7 @@ function Context(df, transforms, functions, expr) {
   this.nodes = {};
   this.data = {};
   this.fn = {};
+  this.registerOpsCb = registerOpsCb;
   if (functions) {
     this.functions = Object.create(functions);
     this.functions.context = this;
@@ -50,6 +51,7 @@ function Subcontext(ctx) {
     this.functions = Object.create(ctx.functions);
     this.functions.context = this;
   }
+  this.registerOpsCb = ctx.registerOpsCb;
 }
 
 Context.prototype = Subcontext.prototype = {
@@ -68,6 +70,12 @@ Context.prototype = Subcontext.prototype = {
     for (const key of keys) ctx.nodes[key].detach();
     ctx.nodes = null;
   },
+  copyFrom(ctx) {
+    this.nodes = {...ctx.nodes, ...this.nodes};
+    this.signals = {...ctx.signals, ...this.signals};
+    this.scales = {...ctx.scales, ...this.scales};
+    this.data = {...ctx.data, ...this.data};
+  },
   get(id) {
     return this.nodes[id];
   },
@@ -80,6 +88,7 @@ Context.prototype = Subcontext.prototype = {
           data = spec.value;
 
     ctx.set(spec.id, op);
+    ctx.registerOpsCb && ctx.registerOpsCb(op);
 
     if (isCollect(spec.type) && data) {
       if (data.$ingest) {

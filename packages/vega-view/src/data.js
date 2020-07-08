@@ -21,7 +21,7 @@ export function change(name, changes) {
   }
   var dataset = dataref(this, name);
   dataset.modified = true;
-  return this.pulse(dataset.input, changes);
+  return this.df.pulse(dataset.input, changes);
 }
 
 export function insert(name, _) {

@@ -12,6 +12,7 @@ import UniqueList from '../util/UniqueList';
 import {defaultLocale} from 'vega-format';
 import {loader} from 'vega-loader';
 import {Error, id, logger} from 'vega-util';
+import { tupleid } from '../Tuple';
 
 /**
  * A dataflow graph for reactive processing of data streams.
@@ -36,6 +37,7 @@ export default function Dataflow() {
 
   this._heap = Heap((a, b) => a.qrank - b.qrank);
   this._postrun = [];
+  this._views = [];
 }
 
 var prototype = Dataflow.prototype;
@@ -187,3 +189,24 @@ prototype.debug = logMethod('debug');
  * @return {number} - The current log level.
  */
 prototype.logLevel = logMethod('level');
+
+
+prototype.registerView = function(view) {
+  this._views.push(view);
+}
+
+prototype.getViewForOp = function(op) {
+  const viewsWithOp = this._views.filter((view) => view.hasOp(op.id));
+  if (!viewsWithOp.length) {
+    throw `No view for op ${op.id}`;
+  }
+  return viewsWithOp[0];
+}
+
+prototype.dirty = function(item, opID) {
+  const viewsWithOp = this._views.filter((view) => view.hasOp(opID));
+  if (!viewsWithOp.length) {
+    console.error(`No views for op ${op.id}`);
+  }
+  viewsWithOp.forEach((view) => view.dirty(item));
+}

@@ -5,6 +5,12 @@ import asyncCallback from '../util/asyncCallback';
 import UniqueList from '../util/UniqueList';
 import {id, isArray} from 'vega-util';
 
+async function renderViews(df) {
+  for (const view of df._views) {
+    await view.renderIfNeeded();
+  }
+}
+
 /**
  * Evaluates the dataflow and returns a Promise that resolves when pulse
  * propagation completes. This method will increment the current timestamp
@@ -41,6 +47,7 @@ export async function evaluate(encode, prerun, postrun) {
   // exit early if there are no updates
   if (!df._touched.length) {
     df.debug('Dataflow invoked, but nothing to do.');
+    await renderViews(df);
     return df;
   }
 
@@ -111,6 +118,8 @@ export async function evaluate(encode, prerun, postrun) {
       await asyncCallback(df, pr[i].callback);
     }
   }
+
+  await renderViews(df);
 
   // invoke postrun function, if provided
   if (postrun) await asyncCallback(df, postrun);

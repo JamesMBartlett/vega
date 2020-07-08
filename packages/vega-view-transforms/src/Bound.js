@@ -16,16 +16,18 @@ export default function Bound(params) {
 var prototype = inherits(Bound, Transform);
 
 prototype.transform = function(_, pulse) {
-  var view = pulse.dataflow,
-      mark = _.mark,
+  var mark = _.mark,
+      df = pulse.dataflow,
+      opID = this.id,
       type = mark.marktype,
       entry = Marks[type],
       bound = entry.bound,
       markBounds = mark.bounds, rebound;
 
+
   if (entry.nested) {
     // multi-item marks have a single bounds instance
-    if (mark.items.length) view.dirty(mark.items[0]);
+    if (mark.items.length) df.dirty(mark.items[0], opID);
     markBounds = boundItem(mark, bound);
     mark.items.forEach(function(item) {
       item.bounds.clear().union(markBounds);
@@ -35,7 +37,7 @@ prototype.transform = function(_, pulse) {
   else if (type === Group || _.modified()) {
     // operator parameters modified -> re-bound all items
     // updates group bounds in response to modified group content
-    pulse.visit(pulse.MOD, item => view.dirty(item));
+    pulse.visit(pulse.MOD, item => df.dirty(item, opID));
     markBounds.clear();
     mark.items.forEach(item => markBounds.union(boundItem(item, bound)));
 
@@ -58,7 +60,7 @@ prototype.transform = function(_, pulse) {
 
     pulse.visit(pulse.MOD, item => {
       rebound = rebound || markBounds.alignsWith(item.bounds);
-      view.dirty(item);
+      df.dirty(item, opID);
       markBounds.union(boundItem(item, bound));
     });
 
